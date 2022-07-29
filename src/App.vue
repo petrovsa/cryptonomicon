@@ -112,7 +112,7 @@
         <hr class="w-full border-t border-gray-600 my-4" />
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
-            v-for="t in filteredList()"
+            v-for="t in paginatedTickers"
             :key="t.name"
             :class="{
               'border-4': sel === t,
@@ -156,7 +156,7 @@
         </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
           <div
-            v-for="(bar, idx) in normalizeGraph()"
+            v-for="(bar, idx) in normalizedGraph"
             :key="idx"
             class="bg-purple-800 border w-10"
             :style="{ height: `${bar}%` }"
@@ -195,6 +195,13 @@
 </template>
 
 <script>
+// [] Зависимы данные в методах
+// Если в методах есть данные состояния (data), то они должны
+// быть в computed.
+//
+//
+//
+
 export default {
   name: "App",
 
@@ -206,7 +213,6 @@ export default {
       graph: [],
       filter: "",
       page: 1,
-      hasNextPage: true,
     };
   },
   created() {
@@ -221,21 +227,50 @@ export default {
       this.tickers.forEach((ticker) => this.tickersUpdate(ticker.name));
     }
   },
-  methods: {
-    filteredList() {
-      const start = (this.page - 1) * 6;
-      const end = this.page * 6;
-      const filteredTickers = this.tickers.filter((ticker) =>
-        ticker.name.includes(this.filter)
-      );
-      console.log(filteredTickers.length, end);
-      this.hasNextPage = filteredTickers.length > end;
-      return filteredTickers.slice(start, end);
+
+  computed: {
+    pageStateOptions() {
+      return {
+        filter: this.filter,
+        page: this.page,
+      };
     },
+    startIndex() {
+      return (this.page - 1) * 6;
+    },
+    endIndex() {
+      return this.page * 6;
+    },
+
+    filteredTickers() {
+      return this.tickers.filter((ticker) => ticker.name.includes(this.filter));
+    },
+
+    paginatedTickers() {
+      return this.filteredTickers.slice(this.startIndex, this.endIndex);
+    },
+
+    hasNextPage() {
+      return this.filteredTickers.length > this.endIndex;
+    },
+
+    normalizedGraph() {
+      const maxValue = Math.max(...this.graph);
+      const minValue = Math.min(...this.graph);
+      if (maxValue === minValue) {
+        return this.graph.map(() => 50);
+      }
+      return this.graph.map(
+        (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
+      );
+    },
+  },
+
+  methods: {
     tickersUpdate(tickerName) {
       setInterval(async () => {
         const f = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=0b5f0119843d41947c980f62e4755e0e5dc78f25f8fabc5ab1ed66ad4e453941`
+          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=1f8807c28835f86f658939b91a5e9cc48b6568f0df3ddf1913d6d56cca93d5f9`
         );
         const data = await f.json();
         this.tickers.find((t) => t.name === tickerName).price =
@@ -246,43 +281,44 @@ export default {
     },
     add() {
       const currentTicker = { name: this.ticker, price: "-" };
-      this.tickers.push(currentTicker);
+      this.tickers = [...this.tickers, currentTicker];
       this.filter = "";
-      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
+
       this.tickersUpdate(currentTicker.name);
     },
     handleDelete(tick) {
-      console.log(tick);
       this.tickers = this.tickers.filter((el) => el !== tick);
+      if (this.sel === tick) {
+        this.sel = null;
+      }
     },
-    normalizeGraph() {
-      const maxValue = Math.max(...this.graph);
-      const minValue = Math.min(...this.graph);
-      return this.graph.map(
-        (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
-      );
-    },
+
     clearGraph(ticker) {
       this.sel = ticker;
-      this.graph = [];
     },
   },
   watch: {
-    filter() {
-      this.page = 1;
-
+    pageStateOptions(option) {
       window.history.pushState(
         null,
         document.title,
-        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
+        `${window.location.pathname}?filter=${option.filter}&page=${option.page}`
       );
     },
-    page() {
-      window.history.pushState(
-        null,
-        document.title,
-        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
-      );
+    tickers() {
+      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
+    },
+    sel() {
+      this.graph = [];
+    },
+
+    paginatedTickers() {
+      if (this.paginatedTickers.length === 0 && this.page > 1) {
+        return (this.page -= 1);
+      }
+    },
+    filter() {
+      this.page = 1;
     },
   },
 };
