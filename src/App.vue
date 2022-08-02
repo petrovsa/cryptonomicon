@@ -195,7 +195,7 @@
 </template>
 
 <script>
-import { subscribeToTicker } from "./api";
+import { subscribeToTicker, unsubscribeTicker } from "./api";
 export default {
   name: "App",
 
@@ -308,6 +308,7 @@ export default {
       if (this.sel === tick) {
         this.sel = null;
       }
+      unsubscribeTicker(tick.name);
     },
 
     clearGraph(ticker) {
